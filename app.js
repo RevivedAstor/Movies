@@ -1,9 +1,12 @@
 const express = require('express');
 const app = express();
 const errorHandler = require('./middleware/errorHandler');
+const path = require('path');
 
 // here are the global middlewares
 app.use(express.json()); // parse JSON request bodies ye
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 // routes
 app.use('/api/auth', require('./routes/authRoutes'));

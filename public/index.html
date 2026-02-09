@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Movie Trailers + Reviews (Minimal)</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; padding: 0 12px; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .tab-btn { padding: 8px 12px; border: 1px solid #ccc; background: #f7f7f7; cursor: pointer; border-radius: 6px; }
+    .tab-btn.active { background: #eaeaea; border-color: #999; }
+    .panel { display: none; border: 1px solid #ddd; border-radius: 8px; padding: 14px; }
+    .panel.active { display: block; }
+    input, button, textarea, select { padding: 8px; font-size: 14px; }
+    input, textarea { width: 100%; box-sizing: border-box; }
+    textarea { min-height: 90px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .muted { color: #666; font-size: 13px; }
+    .card { border: 1px solid #e1e1e1; border-radius: 8px; padding: 12px; margin-top: 10px; }
+    iframe { width: 100%; height: 420px; border: 0; border-radius: 8px; margin-top: 10px; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .danger { border-color: #f2b3b3; background: #fff2f2; }
+    .ok { border-color: #bde5bd; background: #f2fff2; }
+    .inline { display: inline-block; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 10px;}
+    code { background:#f6f6f6; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h2 style="margin:0;">Movie Demo</h2>
+    <div>
+      <span id="authStatus" class="muted">Not logged in</span>
+      <button id="logoutBtn" style="display:none; margin-left:8px;" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-search" onclick="openTab('tab-search')">Search + Trailer</button>
+    <button class="tab-btn" data-tab="tab-register" onclick="openTab('tab-register')">Register</button>
+    <button class="tab-btn" data-tab="tab-login" onclick="openTab('tab-login')">Login</button>
+    <button class="tab-btn" data-tab="tab-reviews" onclick="openTab('tab-reviews')">Reviews</button>
+  </div>
+
+  <!-- SEARCH -->
+  <div id="tab-search" class="panel active">
+    <h3 style="margin-top:0;">Search movie and show trailer</h3>
+
+    <div class="row">
+      <div>
+        <label class="muted">Movie title</label>
+        <input id="searchQuery" placeholder="e.g. fight club" />
+      </div>
+      <div style="display:flex; align-items:end; gap:8px;">
+        <button onclick="searchMovies()">Search</button>
+        <span class="muted inline">Uses <code>/api/movies/search</code> then <code>/api/movies/:id</code></span>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label class="muted">Results (pick one)</label>
+        <select id="movieSelect" onchange="loadSelectedMovie()">
+          <option value="">—</option>
+        </select>
+      </div>
+      <div>
+        <label class="muted">Selected TMDB movieId</label>
+        <input id="selectedMovieId" readonly />
+      </div>
+    </div>
+
+    <div id="movieDetails" class="card" style="display:none;"></div>
+    <div id="searchMsg" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- REGISTER -->
+  <div id="tab-register" class="panel">
+    <h3 style="margin-top:0;">Register</h3>
+
+    <div class="row">
+      <div>
+        <label class="muted">Name</label>
+        <input id="regName" placeholder="Test User" />
+      </div>
+      <div>
+        <label class="muted">Email</label>
+        <input id="regEmail" placeholder="test@example.com" />
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label class="muted">Password</label>
+      <input id="regPassword" type="password" placeholder="password123" />
+    </div>
+
+    <div class="actions">
+      <button onclick="register()">Register</button>
+    </div>
+
+    <div id="regMsg" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="tab-login" class="panel">
+    <h3 style="margin-top:0;">Login</h3>
+
+    <div class="row">
+      <div>
+        <label class="muted">Email</label>
+        <input id="loginEmail" placeholder="test@example.com" />
+      </div>
+      <div>
+        <label class="muted">Password</label>
+        <input id="loginPassword" type="password" placeholder="password123" />
+      </div>
+    </div>
+
+    <div class="actions">
+      <button onclick="login()">Login</button>
+    </div>
+
+    <div id="loginMsg" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- REVIEWS -->
+  <div id="tab-reviews" class="panel">
+    <h3 style="margin-top:0;">Reviews</h3>
+    <p class="muted" style="margin-top:0;">
+      Create requires login (JWT). Listing uses <code>GET /api/reviews</code> and filters by movieId if provided.
+    </p>
+
+    <div class="row3">
+      <div>
+        <label class="muted">movieId (TMDB)</label>
+        <input id="revMovieId" placeholder="e.g. 550" />
+        <div class="muted" style="margin-top:4px;">
+          Tip: pick a movie in the Search tab to auto-fill.
+        </div>
+      </div>
+      <div>
+        <label class="muted">rating (1–10)</label>
+        <input id="revRating" type="number" min="1" max="10" placeholder="9" />
+      </div>
+      <div>
+        <label class="muted">movieTitle (optional)</label>
+        <input id="revMovieTitle" placeholder="Fight Club" />
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      <label class="muted">comment</label>
+      <textarea id="revComment" placeholder="Write your review..."></textarea>
+    </div>
+
+    <div class="actions">
+      <button onclick="createReview()">Create review</button>
+      <button onclick="loadReviews()">Refresh list</button>
+    </div>
+
+    <div id="revMsg" class="muted" style="margin-top:8px;"></div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <label class="muted">Filter list by movieId (optional)</label>
+          <input id="filterMovieId" placeholder="e.g. 550" />
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button onclick="loadReviews()">Load reviews</button>
+        </div>
+      </div>
+      <div id="reviewsList"></div>
+    </div>
+  </div>
+
+  <script>
+    // ====== Tabs ======
+    function openTab(tabId) {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
+    }
+
+    // ====== Auth state ======
+    function getToken() {
+      return localStorage.getItem('token');
+    }
+
+    function setToken(token) {
+      localStorage.setItem('token', token);
+      updateAuthUI();
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      updateAuthUI();
+    }
+
+    function decodeJwtPayload(token) {
+      // Not verification, only decoding (for UI decisions like "is this my review?")
+      try {
+        const payload = token.split('.')[1];
+        const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+        return JSON.parse(json);
+      } catch {
+        return null;
+      }
+    }
+
+    function updateAuthUI() {
+      const token = getToken();
+      const authStatus = document.getElementById('authStatus');
+      const logoutBtn = document.getElementById('logoutBtn');
+
+      if (!token) {
+        authStatus.textContent = 'Not logged in';
+        logoutBtn.style.display = 'none';
+        return;
+      }
+
+      const payload = decodeJwtPayload(token);
+      const email = payload?.email ?? '(token set)';
+      authStatus.textContent = `Logged in: ${email}`;
+      logoutBtn.style.display = 'inline-block';
+    }
+
+    updateAuthUI();
+
+    // ====== Helpers ======
+    async function apiFetch(url, options = {}) {
+      const headers = options.headers || {};
+      if (options.auth) {
+        const token = getToken();
+        if (!token) throw new Error('Not logged in (missing token).');
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      if (!headers['Content-Type'] && options.body) {
+        headers['Content-Type'] = 'application/json';
+      }
+      const res = await fetch(url, { ...options, headers });
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+      if (!res.ok) {
+        const msg = (data && data.message) ? data.message : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    // ====== Movies (TMDB via your backend) ======
+    async function searchMovies() {
+      const q = document.getElementById('searchQuery').value.trim();
+      const msg = document.getElementById('searchMsg');
+      const select = document.getElementById('movieSelect');
+      const details = document.getElementById('movieDetails');
+
+      msg.textContent = '';
+      details.style.display = 'none';
+      details.innerHTML = '';
+      select.innerHTML = '<option value="">—</option>';
+      document.getElementById('selectedMovieId').value = '';
+
+      if (!q) return;
+
+      try {
+        msg.textContent = 'Searching...';
+        const results = await apiFetch(`/api/movies/search?query=${encodeURIComponent(q)}`);
+        if (!Array.isArray(results) || results.length === 0) {
+          msg.textContent = 'No movies found.';
+          return;
+        }
+
+        // Populate dropdown
+        for (const m of results.slice(0, 15)) {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = `${m.title}${m.release_date ? ' (' + m.release_date.slice(0,4) + ')' : ''}`;
+          opt.dataset.title = m.title || '';
+          select.appendChild(opt);
+        }
+
+        msg.textContent = 'Select a movie from the dropdown.';
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function loadSelectedMovie() {
+      const select = document.getElementById('movieSelect');
+      const movieId = select.value;
+      const msg = document.getElementById('searchMsg');
+      const details = document.getElementById('movieDetails');
+
+      details.style.display = 'none';
+      details.innerHTML = '';
+      document.getElementById('selectedMovieId').value = movieId || '';
+
+      // Also prefill review form (minimal convenience, not clutter)
+      document.getElementById('revMovieId').value = movieId || '';
+      document.getElementById('revMovieTitle').value = select.selectedOptions[0]?.dataset?.title || '';
+
+      if (!movieId) return;
+
+      try {
+        msg.textContent = 'Loading details...';
+        const d = await apiFetch(`/api/movies/${movieId}`);
+
+        const trailerEmbed = d.trailerUrl
+          ? d.trailerUrl.replace('watch?v=', 'embed/')
+          : null;
+
+        details.innerHTML = `
+          <h3 style="margin-top:0;">${escapeHtml(d.title || '')}</h3>
+          <p>${escapeHtml(d.overview || '')}</p>
+          <p class="muted">Release: ${escapeHtml(d.releaseDate || 'n/a')}</p>
+          ${trailerEmbed ? `<iframe src="${trailerEmbed}" allowfullscreen></iframe>` : `<p class="muted">No trailer available.</p>`}
+        `;
+        details.style.display = 'block';
+        msg.textContent = '';
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    // Simple HTML escaping for safe rendering
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    // ====== Auth ======
+    async function register() {
+      const name = document.getElementById('regName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      const msg = document.getElementById('regMsg');
+
+      msg.textContent = '';
+      try {
+        const data = await apiFetch('/api/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({ name, email, password })
+        });
+
+        // If your register returns a token, store it. If not, just show message.
+        if (data?.token) setToken(data.token);
+
+        msg.textContent = data?.token
+          ? 'Registered and logged in.'
+          : 'Registered. Now login in the Login tab.';
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const msg = document.getElementById('loginMsg');
+
+      msg.textContent = '';
+      try {
+        const data = await apiFetch('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+        if (!data?.token) throw new Error('No token returned by /api/auth/login');
+        setToken(data.token);
+        msg.textContent = 'Logged in.';
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    // ====== Reviews ======
+    async function createReview() {
+      const msg = document.getElementById('revMsg');
+      msg.textContent = '';
+
+      const movieId = document.getElementById('revMovieId').value.trim();
+      const movieTitle = document.getElementById('revMovieTitle').value.trim();
+      const rating = Number(document.getElementById('revRating').value);
+      const comment = document.getElementById('revComment').value.trim();
+
+      try {
+        const data = await apiFetch('/api/reviews', {
+          method: 'POST',
+          auth: true,
+          body: JSON.stringify({ movieId, movieTitle, rating, comment })
+        });
+
+        msg.textContent = 'Review created.';
+        document.getElementById('revComment').value = '';
+        await loadReviews();
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function loadReviews() {
+      const list = document.getElementById('reviewsList');
+      const msg = document.getElementById('revMsg');
+      const filterMovieId = document.getElementById('filterMovieId').value.trim();
+      list.innerHTML = '';
+      msg.textContent = '';
+
+      try {
+        const url = filterMovieId ? `/api/reviews?movieId=${encodeURIComponent(filterMovieId)}` : '/api/reviews';
+        const reviews = await apiFetch(url);
+
+        if (!Array.isArray(reviews) || reviews.length === 0) {
+          list.innerHTML = `<p class="muted">No reviews found.</p>`;
+          return;
+        }
+
+        const token = getToken();
+        const payload = token ? decodeJwtPayload(token) : null;
+        const myUserId = payload?.userId ?? null;
+
+        for (const r of reviews) {
+          // depending on populate, r.user could be object or id
+          const reviewUserId =
+            (typeof r.user === 'string') ? r.user :
+            (r.user && (r.user._id || r.user.id)) ? (r.user._id || r.user.id) :
+            null;
+
+          const canEdit = myUserId && reviewUserId && (String(myUserId) === String(reviewUserId));
+
+          const authorName = (r.user && typeof r.user === 'object' && r.user.name) ? r.user.name : 'Unknown';
+          const authorEmail = (r.user && typeof r.user === 'object' && r.user.email) ? r.user.email : '';
+
+          const el = document.createElement('div');
+          el.className = 'card';
+          el.innerHTML = `
+            <div class="muted">movieId: <code>${escapeHtml(r.movieId || '')}</code> ${r.movieTitle ? '• ' + escapeHtml(r.movieTitle) : ''}</div>
+            <div><strong>Rating:</strong> ${escapeHtml(r.rating ?? '')}/10</div>
+            <div style="margin-top:6px;">${escapeHtml(r.comment || '')}</div>
+            <div class="muted" style="margin-top:8px;">By: ${escapeHtml(authorName)} ${authorEmail ? '(' + escapeHtml(authorEmail) + ')' : ''}</div>
+            <div class="actions" id="actions-${escapeHtml(r._id)}"></div>
+          `;
+
+          if (canEdit) {
+            const actions = el.querySelector(`#actions-${CSS.escape(r._id)}`);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'danger';
+            delBtn.textContent = 'Delete';
+            delBtn.onclick = () => deleteReview(r._id);
+
+            const editBtn = document.createElement('button');
+            editBtn.textContent = 'Edit (rating/comment)';
+            editBtn.onclick = () => promptEditReview(r);
+
+            actions.appendChild(editBtn);
+            actions.appendChild(delBtn);
+          }
+
+          list.appendChild(el);
+        }
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function deleteReview(id) {
+      const msg = document.getElementById('revMsg');
+      msg.textContent = '';
+      try {
+        await apiFetch(`/api/reviews/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          auth: true
+        });
+        msg.textContent = 'Deleted.';
+        await loadReviews();
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function promptEditReview(r) {
+      const newRating = prompt('New rating (1-10):', String(r.rating ?? ''));
+      if (newRating === null) return;
+      const newComment = prompt('New comment:', String(r.comment ?? ''));
+      if (newComment === null) return;
+
+      const msg = document.getElementById('revMsg');
+      msg.textContent = '';
+      try {
+        await apiFetch(`/api/reviews/${encodeURIComponent(r._id)}`, {
+          method: 'PUT',
+          auth: true,
+          body: JSON.stringify({ rating: Number(newRating), comment: newComment })
+        });
+        msg.textContent = 'Updated.';
+        await loadReviews();
+      } catch (e) {
+        msg.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    // Load reviews when opening the Reviews tab (optional)
+    // openTab('tab-reviews'); loadReviews();
+  </script>
+</body>
+</html>
