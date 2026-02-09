@@ -3,7 +3,7 @@ const { mongoURI } = require('./config');
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
+        await mongoose.connect(mongoURI);
         console.log('MongoDB Connected');
     } catch (err) {
         console.error('DB connection error:', err.message);
